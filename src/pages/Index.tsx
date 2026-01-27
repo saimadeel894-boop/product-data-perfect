@@ -4,6 +4,7 @@ import { ProductInputForm } from '@/components/ProductInputForm';
 import { JsonOutput } from '@/components/JsonOutput';
 import { ReviewNotes } from '@/components/ReviewNotes';
 import { DataPreview } from '@/components/DataPreview';
+import { ImportButton } from '@/components/ImportButton';
 import { ProductData } from '@/types/product';
 import { generateMockProductData } from '@/lib/mockProductData';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -62,6 +63,15 @@ const Index = () => {
           <div className="space-y-6">
             {productData ? (
               <div className="card-elevated p-6 animate-fade-in">
+                {/* Import Action */}
+                <div className="flex items-center justify-between mb-6 pb-4 border-b border-border">
+                  <div>
+                    <h2 className="text-lg font-semibold">{productData.product_title}</h2>
+                    <p className="text-sm text-muted-foreground font-mono">{productData.sku}</p>
+                  </div>
+                  <ImportButton productData={productData} />
+                </div>
+
                 <Tabs defaultValue="preview" className="w-full">
                   <TabsList className="mb-4">
                     <TabsTrigger value="preview" className="flex items-center gap-2">
