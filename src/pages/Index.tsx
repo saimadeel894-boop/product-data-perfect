@@ -5,6 +5,7 @@ import { JsonOutput } from '@/components/JsonOutput';
 import { ReviewNotes } from '@/components/ReviewNotes';
 import { DataPreview } from '@/components/DataPreview';
 import { ImportButton } from '@/components/ImportButton';
+import { ApiHealthStatus } from '@/components/ApiHealthStatus';
 import { ProductData } from '@/types/product';
 import { generateMockProductData } from '@/lib/mockProductData';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -56,6 +57,12 @@ const Index = () => {
               <p className="text-xs text-muted-foreground mt-2">
                 Example: Jimmy H8 Flex Cordless Vacuum Cleaner 550W
               </p>
+            </div>
+
+            {/* API Health Status */}
+            <div className="card-elevated p-6 animate-fade-in" style={{ animationDelay: '0.2s' }}>
+              <h3 className="text-sm font-medium mb-3">WooCommerce API Status</h3>
+              <ApiHealthStatus />
             </div>
           </div>
 
