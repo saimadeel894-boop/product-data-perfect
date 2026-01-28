@@ -80,22 +80,41 @@ export const generateMockProductData = (productName: string): ProductData => {
     review_notes: [
       {
         type: 'source',
-        message: 'Product specifications derived from input product name',
+        message: `Data sources: Product name input "${productName}". No PDF provided. Specifications are mock data for demonstration.`,
+      },
+      {
+        type: 'source',
+        message: 'Image sources: Unsplash placeholder images (not official product images)',
       },
       {
         type: 'estimate',
-        field: 'pricing',
-        message: 'Prices estimated based on similar products in market segment',
+        field: 'pricing.cost_price',
+        message: 'Cost price estimated at $85 USD based on similar cordless vacuum market analysis',
+      },
+      {
+        type: 'estimate',
+        field: 'pricing.retail_price',
+        message: 'Retail price estimated at $249.99 USD based on competitor pricing for similar specifications',
       },
       {
         type: 'assumption',
         field: 'supplier_trade.moq',
-        message: 'MOQ values assumed based on typical B2B requirements',
+        message: 'MOQ values assumed: 100 units base, 500 for exclusive importers, 200 for distributors, 50 for retailers',
+      },
+      {
+        type: 'assumption',
+        field: 'logistics.manufacturing_time',
+        message: 'Manufacturing time assumed at 15-20 business days based on typical Chinese manufacturer lead times',
       },
       {
         type: 'missing',
         field: 'images',
-        message: 'Official product images not available - using placeholder images',
+        message: 'REQUIRES ACTION: Official product images not available - replace placeholder images with manufacturer images before publishing',
+      },
+      {
+        type: 'missing',
+        field: 'supplier_trade.hs_code',
+        message: 'HS Code 8508.11.00 is placeholder - verify with supplier for accurate customs classification',
       },
     ],
   };
