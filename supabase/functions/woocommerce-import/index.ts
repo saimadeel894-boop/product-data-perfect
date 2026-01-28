@@ -150,9 +150,15 @@ serve(async (req) => {
 
     console.log('Importing product to WooCommerce:', productData.product_title);
 
+    // Normalize URL - remove /wp-admin if present
+    let normalizedUrl = wooUrl.replace(/\/+$/, ''); // Remove trailing slashes
+    normalizedUrl = normalizedUrl.replace(/\/wp-admin\/?.*$/i, ''); // Remove /wp-admin and anything after
+    
     // Make request to WooCommerce REST API
-    const apiUrl = `${wooUrl.replace(/\/$/, '')}/wp-json/wc/v3/products`;
+    const apiUrl = `${normalizedUrl}/wp-json/wc/v3/products`;
     const auth = btoa(`${consumerKey}:${consumerSecret}`);
+    
+    console.log('API endpoint:', apiUrl);
 
     const response = await fetch(apiUrl, {
       method: 'POST',
