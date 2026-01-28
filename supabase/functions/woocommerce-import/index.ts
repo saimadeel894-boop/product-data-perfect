@@ -99,9 +99,16 @@ serve(async (req) => {
 
     // Filter out placeholder/invalid image URLs and prepare for WooCommerce
     const validImageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+    const validImageFormats = ['fm=jpg', 'fm=jpeg', 'fm=png', 'fm=gif', 'fm=webp', 'format=jpg', 'format=jpeg', 'format=png'];
     const invalidDomains = ['via.placeholder.com', 'placeholder.com', 'placehold.it', 'placekitten.com', 'picsum.photos'];
+    const trustedCdns = ['images.unsplash.com', 'cdn.shopify.com', 'i.imgur.com', 'cloudinary.com', 'res.cloudinary.com'];
     
     const validImages = productData.images.filter(url => {
+      if (!url || typeof url !== 'string') {
+        console.log('Skipping invalid image URL:', url);
+        return false;
+      }
+      
       // Check if URL is from a placeholder service
       const isPlaceholder = invalidDomains.some(domain => url.toLowerCase().includes(domain));
       if (isPlaceholder) {
@@ -109,12 +116,30 @@ serve(async (req) => {
         return false;
       }
       
-      // Check if URL has a valid image extension or is a direct image URL
       const urlLower = url.toLowerCase();
-      const hasValidExtension = validImageExtensions.some(ext => urlLower.includes(ext));
       const isHttpUrl = url.startsWith('http://') || url.startsWith('https://');
       
-      return isHttpUrl && (hasValidExtension || !url.includes('placeholder'));
+      if (!isHttpUrl) {
+        console.log('Skipping non-HTTP image:', url);
+        return false;
+      }
+      
+      // Check for valid file extension
+      const hasValidExtension = validImageExtensions.some(ext => urlLower.includes(ext));
+      
+      // Check for valid format parameter (common in CDNs like Unsplash)
+      const hasValidFormat = validImageFormats.some(fmt => urlLower.includes(fmt));
+      
+      // Check if from a trusted CDN (these serve images without extensions)
+      const isTrustedCdn = trustedCdns.some(cdn => urlLower.includes(cdn));
+      
+      const isValid = hasValidExtension || hasValidFormat || isTrustedCdn;
+      
+      if (!isValid) {
+        console.log('Skipping image without valid extension/format:', url);
+      }
+      
+      return isValid;
     });
 
     const images = validImages.map((url, index) => ({
@@ -181,55 +206,89 @@ serve(async (req) => {
     
     console.log('API endpoint:', apiUrl);
 
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(wooProduct),
-    });
+    // Helper function to make API request
+    const makeRequest = async (payload: typeof wooProduct) => {
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      
+      const responseText = await response.text();
+      let result;
+      
+      try {
+        result = JSON.parse(responseText);
+      } catch {
+        console.error('Failed to parse WooCommerce response:', responseText);
+        return { ok: false, error: 'Invalid response from WooCommerce', details: responseText.substring(0, 500) };
+      }
+      
+      return { ok: response.ok, status: response.status, result };
+    };
 
-    const responseText = await response.text();
-    let result;
+    // First attempt with images
+    let apiResponse = await makeRequest(wooProduct);
+    let importedWithImages = true;
     
-    try {
-      result = JSON.parse(responseText);
-    } catch {
-      console.error('Failed to parse WooCommerce response:', responseText);
+    // If failed due to image upload error, retry without images
+    if (!apiResponse.ok && apiResponse.result?.code === 'woocommerce_product_image_upload_error') {
+      console.log('Image upload failed, retrying without images...');
+      const payloadWithoutImages = { ...wooProduct, images: [] };
+      apiResponse = await makeRequest(payloadWithoutImages);
+      importedWithImages = false;
+    }
+
+    // Handle parsing errors
+    if (apiResponse.error) {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Invalid response from WooCommerce',
-          details: responseText.substring(0, 500)
+          error: apiResponse.error,
+          details: apiResponse.details
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    if (!response.ok) {
-      console.error('WooCommerce API error:', result);
+    if (!apiResponse.ok) {
+      console.error('WooCommerce API error:', apiResponse.result);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: result.message || 'Failed to import product',
-          code: result.code,
-          details: result.data
+          error: apiResponse.result.message || 'Failed to import product',
+          code: apiResponse.result.code,
+          details: apiResponse.result.data
         }),
-        { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: apiResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Product imported successfully:', result.id);
+    const result = apiResponse.result;
+    console.log('Product imported successfully:', result.id, 'with images:', importedWithImages);
 
+    // Normalize URL for edit link (remove /wp-admin if present)
+    const baseUrl = wooUrl.replace(/\/+$/, '').replace(/\/wp-admin\/?.*$/i, '');
+    
+    // Build success message
+    let successMessage = `Product "${productData.product_title}" imported successfully as draft`;
+    if (!importedWithImages && images.length > 0) {
+      successMessage += '. Note: Images could not be uploaded - please add them manually in WordPress.';
+    }
+    
     return new Response(
       JSON.stringify({ 
         success: true, 
         product_id: result.id,
         product_url: result.permalink,
-        edit_url: `${wooUrl.replace(/\/$/, '')}/wp-admin/post.php?post=${result.id}&action=edit`,
+        edit_url: `${baseUrl}/wp-admin/post.php?post=${result.id}&action=edit`,
         status: 'draft',
-        message: `Product "${productData.product_title}" imported successfully as draft`
+        images_imported: importedWithImages,
+        images_count: importedWithImages ? images.length : 0,
+        message: successMessage
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
