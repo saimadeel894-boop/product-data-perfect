@@ -1,19 +1,35 @@
 import { ProductData } from '@/types/product';
+import { formatProductTitle, generateSkuFromTitle, parseProductName } from './utils/titleFormatter';
+
+// Default specifications used for title inference when needed
+const DEFAULT_SPECIFICATIONS = [
+  '550W Motor Power',
+  '60min Runtime',
+  'HEPA Filtration',
+  'LED Display',
+  '0.5L Dust Capacity',
+  'Lightweight Design (2.5kg)',
+];
 
 export const generateMockProductData = (productName: string): ProductData => {
-  // Parse product name for brand and model
-  const words = productName.split(' ');
-  const brand = words[0] || 'Generic';
-  const model = words.slice(1, 3).join(' ') || 'Product';
-  const sku = productName
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, '')
-    .split(' ')
-    .slice(0, 3)
-    .join('-');
+  // Default category for title inference
+  const category = 'Home Appliances > Vacuum Cleaners';
+  
+  // Format the title using the strict Brand + Model + Key Spec pattern
+  const formattedTitle = formatProductTitle(
+    productName || 'Sample Product',
+    DEFAULT_SPECIFICATIONS,
+    category
+  );
+  
+  // Generate SKU from the formatted title
+  const sku = generateSkuFromTitle(formattedTitle);
+  
+  // Parse for brand name (used in supplier name)
+  const { brand } = parseProductName(productName);
 
   return {
-    product_title: productName || 'Sample Product',
+    product_title: formattedTitle,
     sku: sku || 'sample-product',
     product_type: 'simple',
     category: 'Home Appliances > Vacuum Cleaners',
@@ -67,7 +83,7 @@ export const generateMockProductData = (productName: string): ProductData => {
       ],
     },
     descriptions: {
-      product_overview: `The ${productName} represents the next generation of cordless cleaning technology. Engineered for modern homes and busy professionals, this powerful yet lightweight vacuum delivers exceptional suction performance with the convenience of cord-free operation. The advanced brushless motor ensures quiet, efficient cleaning across all floor types.`,
+      product_overview: `The ${formattedTitle} represents the next generation of cordless cleaning technology. Engineered for modern homes and busy professionals, this powerful yet lightweight vacuum delivers exceptional suction performance with the convenience of cord-free operation. The advanced brushless motor ensures quiet, efficient cleaning across all floor types.`,
       key_highlights: [
         'Powerful 550W brushless motor delivers consistent suction',
         'Up to 60 minutes of runtime on a single charge',
