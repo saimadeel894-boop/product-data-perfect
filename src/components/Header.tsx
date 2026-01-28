@@ -1,12 +1,11 @@
-import { Database, Boxes } from 'lucide-react';
-
 export const Header = () => {
   return (
     <header className="border-b border-border bg-card">
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary text-primary-foreground">
-            <Database className="w-5 h-5" />
+          {/* Placeholder logo - replace with official Transeo Africa logo */}
+          <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary text-primary-foreground font-bold text-lg">
+            TA
           </div>
           <div>
             <h1 className="text-lg font-semibold text-foreground flex items-center gap-2">
