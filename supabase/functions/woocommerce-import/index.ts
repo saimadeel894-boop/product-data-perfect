@@ -230,14 +230,32 @@ serve(async (req) => {
       return { ok: response.ok, status: response.status, result };
     };
 
+    // Helper function to generate unique SKU suffix
+    const generateUniqueSku = (baseSku: string) => {
+      const timestamp = Date.now().toString(36);
+      const random = Math.random().toString(36).substring(2, 6);
+      return `${baseSku}-${timestamp}${random}`;
+    };
+
     // First attempt with images
     let apiResponse = await makeRequest(wooProduct);
     let importedWithImages = true;
+    let skuModified = false;
+    let finalSku = wooProduct.sku;
+    
+    // If failed due to duplicate SKU, retry with unique SKU
+    if (!apiResponse.ok && apiResponse.result?.code === 'product_invalid_sku') {
+      console.log('Duplicate SKU detected, generating unique SKU...');
+      finalSku = generateUniqueSku(wooProduct.sku);
+      const payloadWithUniqueSku = { ...wooProduct, sku: finalSku };
+      apiResponse = await makeRequest(payloadWithUniqueSku);
+      skuModified = true;
+    }
     
     // If failed due to image upload error, retry without images
     if (!apiResponse.ok && apiResponse.result?.code === 'woocommerce_product_image_upload_error') {
       console.log('Image upload failed, retrying without images...');
-      const payloadWithoutImages = { ...wooProduct, images: [] };
+      const payloadWithoutImages = { ...wooProduct, images: [], sku: finalSku };
       apiResponse = await makeRequest(payloadWithoutImages);
       importedWithImages = false;
     }
@@ -275,8 +293,11 @@ serve(async (req) => {
     
     // Build success message
     let successMessage = `Product "${productData.product_title}" imported successfully as draft`;
+    if (skuModified) {
+      successMessage += `. Note: SKU was modified to "${finalSku}" because the original SKU already exists.`;
+    }
     if (!importedWithImages && images.length > 0) {
-      successMessage += '. Note: Images could not be uploaded - please add them manually in WordPress.';
+      successMessage += ' Images could not be uploaded - please add them manually in WordPress.';
     }
     
     return new Response(
@@ -286,6 +307,9 @@ serve(async (req) => {
         product_url: result.permalink,
         edit_url: `${baseUrl}/wp-admin/post.php?post=${result.id}&action=edit`,
         status: 'draft',
+        sku: finalSku,
+        sku_modified: skuModified,
+        original_sku: skuModified ? productData.sku : undefined,
         images_imported: importedWithImages,
         images_count: importedWithImages ? images.length : 0,
         message: successMessage
