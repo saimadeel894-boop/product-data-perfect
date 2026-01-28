@@ -34,9 +34,9 @@ export const generateMockProductData = (productName: string): ProductData => {
     product_type: 'simple',
     category: 'Home Appliances > Vacuum Cleaners',
     images: [
-      'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400',
-      'https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=400',
-      'https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=400',
+      'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&fm=jpg',
+      'https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=800&fm=jpg',
+      'https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=800&fm=jpg',
     ],
     pricing: {
       cost_price: 85.00,
