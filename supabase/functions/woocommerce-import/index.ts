@@ -97,11 +97,32 @@ serve(async (req) => {
       ? `<ul>${productData.sales_content.key_specifications.map(s => `<li>${s}</li>`).join('\n')}</ul>`
       : productData.descriptions.product_overview.substring(0, 200);
 
-    // Prepare images array for WooCommerce
-    const images = productData.images.map((url, index) => ({
+    // Filter out placeholder/invalid image URLs and prepare for WooCommerce
+    const validImageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+    const invalidDomains = ['via.placeholder.com', 'placeholder.com', 'placehold.it', 'placekitten.com', 'picsum.photos'];
+    
+    const validImages = productData.images.filter(url => {
+      // Check if URL is from a placeholder service
+      const isPlaceholder = invalidDomains.some(domain => url.toLowerCase().includes(domain));
+      if (isPlaceholder) {
+        console.log('Skipping placeholder image:', url);
+        return false;
+      }
+      
+      // Check if URL has a valid image extension or is a direct image URL
+      const urlLower = url.toLowerCase();
+      const hasValidExtension = validImageExtensions.some(ext => urlLower.includes(ext));
+      const isHttpUrl = url.startsWith('http://') || url.startsWith('https://');
+      
+      return isHttpUrl && (hasValidExtension || !url.includes('placeholder'));
+    });
+
+    const images = validImages.map((url, index) => ({
       src: url,
       position: index,
     }));
+    
+    console.log(`Filtered images: ${validImages.length} valid out of ${productData.images.length} total`);
 
     // Build meta data for ACF fields
     const metaData = [
