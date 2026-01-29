@@ -43,6 +43,13 @@ export interface ReviewNote {
   message: string;
 }
 
+export interface ProductMetadata {
+  model_researched: string;
+  extraction_timestamp: string;
+  sources_used: string[];
+  spec_hash: string;
+}
+
 export interface ProductData {
   product_title: string;
   sku: string;
@@ -55,6 +62,7 @@ export interface ProductData {
   sales_content: SalesContent;
   descriptions: Descriptions;
   review_notes: ReviewNote[];
+  _metadata?: ProductMetadata;
 }
 
 export interface ProductFormInput {
