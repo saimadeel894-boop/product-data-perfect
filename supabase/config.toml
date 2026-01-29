@@ -1,1 +1,10 @@
 project_id = "ekygoqsquwnsixyiqygy"
+
+[functions.product-research]
+verify_jwt = false
+
+[functions.woocommerce-import]
+verify_jwt = false
+
+[functions.woocommerce-health]
+verify_jwt = false
