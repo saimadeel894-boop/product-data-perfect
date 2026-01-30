@@ -42,7 +42,7 @@ export const ProductInputForm = ({ onSubmit, isLoading }: ProductInputFormProps)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (productName.trim() || pdfFile) {
+    if (productName.trim()) {
       onSubmit(productName.trim(), pdfFile);
     }
   };
@@ -51,7 +51,7 @@ export const ProductInputForm = ({ onSubmit, isLoading }: ProductInputFormProps)
     setPdfFile(null);
   };
 
-  const isValid = productName.trim() || pdfFile;
+  const isValid = productName.trim().length > 0;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
