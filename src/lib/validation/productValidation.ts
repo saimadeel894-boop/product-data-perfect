@@ -17,10 +17,7 @@ export interface ValidationWarning {
   message: string;
 }
 
-// Title format: Brand + Model + Key Spec
-const TITLE_PATTERN = /^[A-Z][a-zA-Z0-9]+ [A-Za-z0-9\-\s]+ [A-Za-z0-9\s]+$/;
-
-// SKU format: brand-model (lowercase, hyphenated)
+// SKU format: brand-model (lowercase, hyphenated) - now accepts auto-generated format
 const SKU_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)+$/;
 
 export const validateProduct = (data: ProductData): ValidationResult => {
@@ -36,10 +33,10 @@ export const validateProduct = (data: ProductData): ValidationResult => {
     });
   } else {
     const words = data.product_title.trim().split(' ');
-    if (words.length < 3) {
+    if (words.length < 2) {
       errors.push({
         field: 'product_title',
-        message: 'Title must include Brand + Model + Key Spec (minimum 3 parts)',
+        message: 'Title must include at least Brand + Model (minimum 2 parts)',
         category: 'title',
       });
     }
@@ -52,7 +49,7 @@ export const validateProduct = (data: ProductData): ValidationResult => {
     }
   }
 
-  // === SKU VALIDATION ===
+  // === SKU VALIDATION (now lenient - auto-generated is acceptable) ===
   if (!data.sku || data.sku.trim() === '') {
     errors.push({
       field: 'sku',
@@ -60,10 +57,10 @@ export const validateProduct = (data: ProductData): ValidationResult => {
       category: 'sku',
     });
   } else if (!SKU_PATTERN.test(data.sku)) {
-    errors.push({
+    // Just a warning now - SKU format is preferred but not required
+    warnings.push({
       field: 'sku',
-      message: 'SKU must be lowercase, hyphenated (e.g., jimmy-h8-flex)',
-      category: 'sku',
+      message: 'SKU should be lowercase, hyphenated (e.g., jimmy-h8-flex)',
     });
   }
 
@@ -76,12 +73,16 @@ export const validateProduct = (data: ProductData): ValidationResult => {
     });
   }
 
-  // === IMAGES VALIDATION (minimum 3) ===
-  if (!data.images || data.images.length < 3) {
-    errors.push({
+  // === IMAGES VALIDATION (now warning instead of error) ===
+  if (!data.images || data.images.length === 0) {
+    warnings.push({
       field: 'images',
-      message: `Minimum 3 product images required (currently ${data.images?.length || 0})`,
-      category: 'images',
+      message: 'No product images - product will be imported as draft for manual image addition',
+    });
+  } else if (data.images.length < 3) {
+    warnings.push({
+      field: 'images',
+      message: `Only ${data.images.length} image(s) found - recommend at least 3 for better presentation`,
     });
   } else {
     // Check for valid URLs
@@ -94,34 +95,46 @@ export const validateProduct = (data: ProductData): ValidationResult => {
     }
   }
 
-  // === PRICING VALIDATION (all fields required, USD) ===
-  if (data.pricing.cost_price === null || data.pricing.cost_price <= 0) {
+  // === PRICING VALIDATION (now lenient - prefilled values are acceptable) ===
+  // Only error if ALL pricing is missing/zero
+  const hasSomePricing = 
+    (data.pricing.cost_price !== null && data.pricing.cost_price > 0) ||
+    (data.pricing.supply_price !== null && data.pricing.supply_price > 0) ||
+    (data.pricing.wholesale_price !== null && data.pricing.wholesale_price > 0) ||
+    (data.pricing.retail_price !== null && data.pricing.retail_price > 0);
+  
+  if (!hasSomePricing) {
     errors.push({
-      field: 'pricing.cost_price',
-      message: 'Cost price is required and must be greater than 0',
+      field: 'pricing',
+      message: 'At least one pricing field must be set',
       category: 'pricing',
     });
-  }
-  if (data.pricing.supply_price === null || data.pricing.supply_price <= 0) {
-    errors.push({
-      field: 'pricing.supply_price',
-      message: 'Supply price is required and must be greater than 0',
-      category: 'pricing',
-    });
-  }
-  if (data.pricing.wholesale_price === null || data.pricing.wholesale_price <= 0) {
-    errors.push({
-      field: 'pricing.wholesale_price',
-      message: 'Wholesale price is required and must be greater than 0',
-      category: 'pricing',
-    });
-  }
-  if (data.pricing.retail_price === null || data.pricing.retail_price <= 0) {
-    errors.push({
-      field: 'pricing.retail_price',
-      message: 'Retail price is required and must be greater than 0',
-      category: 'pricing',
-    });
+  } else {
+    // Individual missing prices are warnings, not errors
+    if (data.pricing.cost_price === null || data.pricing.cost_price <= 0) {
+      warnings.push({
+        field: 'pricing.cost_price',
+        message: 'Cost price is missing or zero - using estimated value',
+      });
+    }
+    if (data.pricing.supply_price === null || data.pricing.supply_price <= 0) {
+      warnings.push({
+        field: 'pricing.supply_price',
+        message: 'Supply price is missing or zero - using estimated value',
+      });
+    }
+    if (data.pricing.wholesale_price === null || data.pricing.wholesale_price <= 0) {
+      warnings.push({
+        field: 'pricing.wholesale_price',
+        message: 'Wholesale price is missing or zero - using estimated value',
+      });
+    }
+    if (data.pricing.retail_price === null || data.pricing.retail_price <= 0) {
+      warnings.push({
+        field: 'pricing.retail_price',
+        message: 'Retail price is missing or zero - using estimated value',
+      });
+    }
   }
 
   // Pricing hierarchy check
@@ -151,39 +164,37 @@ export const validateProduct = (data: ProductData): ValidationResult => {
     }
   }
 
-  // === MOQ VALIDATION ===
-  if (data.supplier_trade.moq === null) {
-    errors.push({
+  // === MOQ VALIDATION (now all warnings, no errors - prefilled values are acceptable) ===
+  if (data.supplier_trade.moq === null || data.supplier_trade.moq <= 0) {
+    warnings.push({
       field: 'supplier_trade.moq',
-      message: 'Base MOQ is required',
-      category: 'moq',
+      message: 'Base MOQ is missing - using default value',
     });
   }
-  if (data.supplier_trade.moq_exclusive_importer === null) {
+  if (data.supplier_trade.moq_exclusive_importer === null || data.supplier_trade.moq_exclusive_importer <= 0) {
     warnings.push({
       field: 'supplier_trade.moq_exclusive_importer',
-      message: 'MOQ for Exclusive Importer should be specified',
+      message: 'MOQ for Exclusive Importer using default value',
     });
   }
-  if (data.supplier_trade.moq_distributor === null) {
+  if (data.supplier_trade.moq_distributor === null || data.supplier_trade.moq_distributor <= 0) {
     warnings.push({
       field: 'supplier_trade.moq_distributor',
-      message: 'MOQ for Distributor should be specified',
+      message: 'MOQ for Distributor using default value',
     });
   }
-  if (data.supplier_trade.moq_retailer === null) {
+  if (data.supplier_trade.moq_retailer === null || data.supplier_trade.moq_retailer <= 0) {
     warnings.push({
       field: 'supplier_trade.moq_retailer',
-      message: 'MOQ for Retailer should be specified',
+      message: 'MOQ for Retailer using default value',
     });
   }
 
   // === SUPPLIER & LOGISTICS VALIDATION ===
   if (!data.supplier_trade.supplier_name || data.supplier_trade.supplier_name.trim() === '') {
-    errors.push({
+    warnings.push({
       field: 'supplier_trade.supplier_name',
-      message: 'Supplier name is required',
-      category: 'logistics',
+      message: 'Supplier name should be specified',
     });
   }
   if (!data.supplier_trade.hs_code || data.supplier_trade.hs_code.trim() === '') {
@@ -216,10 +227,9 @@ export const validateProduct = (data: ProductData): ValidationResult => {
 
   // === DESCRIPTIONS VALIDATION ===
   if (!data.descriptions.product_overview || data.descriptions.product_overview.trim() === '') {
-    errors.push({
+    warnings.push({
       field: 'descriptions.product_overview',
-      message: 'Product overview is required',
-      category: 'specifications',
+      message: 'Product overview is recommended',
     });
   }
   if (!data.descriptions.key_highlights || data.descriptions.key_highlights.length === 0) {
@@ -229,23 +239,12 @@ export const validateProduct = (data: ProductData): ValidationResult => {
     });
   }
 
-  // === REVIEW NOTES VALIDATION (mandatory) ===
+  // === REVIEW NOTES VALIDATION (check for auto-generated notes) ===
   if (!data.review_notes || data.review_notes.length === 0) {
-    errors.push({
+    warnings.push({
       field: 'review_notes',
-      message: 'Review notes are mandatory - must document sources, estimates, and assumptions',
-      category: 'review_notes',
+      message: 'No review notes found - data sources should be documented',
     });
-  } else {
-    // Check for required note types
-    const hasSourceNote = data.review_notes.some(n => n.type === 'source');
-    if (!hasSourceNote) {
-      errors.push({
-        field: 'review_notes',
-        message: 'Must include at least one source note documenting data origin',
-        category: 'review_notes',
-      });
-    }
   }
 
   return {
@@ -269,7 +268,7 @@ export const getValidationSummary = (result: ValidationResult): string => {
     return 'All validation checks passed';
   }
   if (result.isValid) {
-    return `Ready to import with ${result.warnings.length} warning(s)`;
+    return `Ready to import with ${result.warnings.length} warning(s) - review notes document any prefilled values`;
   }
   return `${result.errors.length} error(s) must be fixed before import`;
 };
