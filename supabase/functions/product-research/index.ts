@@ -73,13 +73,173 @@ function generateSpecHash(specs: string[]): string {
   return Math.abs(hash).toString(36);
 }
 
-// Generate SKU from product title
+// Generate SKU from product title in brand-model format (lowercase, hyphenated)
 function generateSku(title: string): string {
-  const words = title.split(/\s+/).filter(w => w.length > 1);
-  const brand = words[0]?.toUpperCase().substring(0, 3) || 'PRD';
-  const model = words.slice(1, 3).map(w => w.toUpperCase().substring(0, 2)).join('');
-  const random = Math.random().toString(36).substring(2, 6).toUpperCase();
-  return `${brand}-${model}-${random}`;
+  // Extract brand and model from title, convert to lowercase, hyphenated format
+  const words = title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
+    .split(/\s+/)
+    .filter(w => w.length > 0);
+  
+  // Take first word as brand, next 1-2 as model
+  const brand = words[0] || 'product';
+  const model = words.slice(1, 3).join('-') || 'item';
+  
+  return `${brand}-${model}`;
+}
+
+// Generate unique SKU suffix for duplicates
+function generateUniqueSkuSuffix(): string {
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).substring(2, 4);
+  return `${timestamp}${random}`;
+}
+
+// Default pricing multipliers for category-based estimation
+const CATEGORY_PRICING_MULTIPLIERS: Record<string, { costToSupply: number; supplyToWholesale: number; wholesaleToRetail: number }> = {
+  'default': { costToSupply: 1.15, supplyToWholesale: 1.25, wholesaleToRetail: 1.5 },
+  'electronics': { costToSupply: 1.2, supplyToWholesale: 1.3, wholesaleToRetail: 1.6 },
+  'appliances': { costToSupply: 1.15, supplyToWholesale: 1.25, wholesaleToRetail: 1.4 },
+  'cleaning': { costToSupply: 1.12, supplyToWholesale: 1.2, wholesaleToRetail: 1.35 },
+};
+
+// Default MOQ values by tier
+const DEFAULT_MOQ = {
+  base: 100,
+  exclusive_importer: 500,
+  distributor: 200,
+  retailer: 50,
+};
+
+// Prefill missing pricing based on available values or category defaults
+function prefillPricing(
+  pricing: ProductData['pricing'], 
+  category: string
+): { pricing: ProductData['pricing']; prefilled: string[] } {
+  const prefilled: string[] = [];
+  const categoryKey = Object.keys(CATEGORY_PRICING_MULTIPLIERS).find(k => 
+    category.toLowerCase().includes(k)
+  ) || 'default';
+  const multipliers = CATEGORY_PRICING_MULTIPLIERS[categoryKey];
+  
+  const result = { ...pricing };
+  
+  // If we have retail price, work backwards
+  if (result.retail_price && result.retail_price > 0) {
+    if (!result.wholesale_price || result.wholesale_price <= 0) {
+      result.wholesale_price = Math.round(result.retail_price / multipliers.wholesaleToRetail * 100) / 100;
+      prefilled.push('wholesale_price');
+    }
+    if (!result.supply_price || result.supply_price <= 0) {
+      result.supply_price = Math.round((result.wholesale_price || result.retail_price / multipliers.wholesaleToRetail) / multipliers.supplyToWholesale * 100) / 100;
+      prefilled.push('supply_price');
+    }
+    if (!result.cost_price || result.cost_price <= 0) {
+      result.cost_price = Math.round((result.supply_price || result.retail_price / multipliers.wholesaleToRetail / multipliers.supplyToWholesale) / multipliers.costToSupply * 100) / 100;
+      prefilled.push('cost_price');
+    }
+  }
+  // If we have cost price, work forwards
+  else if (result.cost_price && result.cost_price > 0) {
+    if (!result.supply_price || result.supply_price <= 0) {
+      result.supply_price = Math.round(result.cost_price * multipliers.costToSupply * 100) / 100;
+      prefilled.push('supply_price');
+    }
+    if (!result.wholesale_price || result.wholesale_price <= 0) {
+      result.wholesale_price = Math.round((result.supply_price || result.cost_price * multipliers.costToSupply) * multipliers.supplyToWholesale * 100) / 100;
+      prefilled.push('wholesale_price');
+    }
+    if (!result.retail_price || result.retail_price <= 0) {
+      result.retail_price = Math.round((result.wholesale_price || result.cost_price * multipliers.costToSupply * multipliers.supplyToWholesale) * multipliers.wholesaleToRetail * 100) / 100;
+      prefilled.push('retail_price');
+    }
+  }
+  // No pricing available - use category defaults starting from estimated retail
+  else {
+    const estimatedRetail = 199.99; // Conservative default
+    result.retail_price = estimatedRetail;
+    result.wholesale_price = Math.round(estimatedRetail / multipliers.wholesaleToRetail * 100) / 100;
+    result.supply_price = Math.round(result.wholesale_price / multipliers.supplyToWholesale * 100) / 100;
+    result.cost_price = Math.round(result.supply_price / multipliers.costToSupply * 100) / 100;
+    prefilled.push('cost_price', 'supply_price', 'wholesale_price', 'retail_price');
+  }
+  
+  return { pricing: result, prefilled };
+}
+
+// Prefill missing MOQ values
+function prefillMoq(
+  supplierTrade: ProductData['supplier_trade']
+): { supplier_trade: ProductData['supplier_trade']; prefilled: string[] } {
+  const prefilled: string[] = [];
+  const result = { ...supplierTrade };
+  
+  if (result.moq === null || result.moq <= 0) {
+    result.moq = DEFAULT_MOQ.base;
+    prefilled.push('moq');
+  }
+  if (result.moq_exclusive_importer === null || result.moq_exclusive_importer <= 0) {
+    result.moq_exclusive_importer = DEFAULT_MOQ.exclusive_importer;
+    prefilled.push('moq_exclusive_importer');
+  }
+  if (result.moq_distributor === null || result.moq_distributor <= 0) {
+    result.moq_distributor = DEFAULT_MOQ.distributor;
+    prefilled.push('moq_distributor');
+  }
+  if (result.moq_retailer === null || result.moq_retailer <= 0) {
+    result.moq_retailer = DEFAULT_MOQ.retailer;
+    prefilled.push('moq_retailer');
+  }
+  
+  return { supplier_trade: result, prefilled };
+}
+
+// Filter and validate images - max 3, no placeholders
+function filterValidImages(images: string[]): { validImages: string[]; notes: string[] } {
+  const notes: string[] = [];
+  const invalidDomains = ['via.placeholder.com', 'placeholder.com', 'placehold.it', 'placekitten.com', 'picsum.photos'];
+  const validExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+  const validFormats = ['fm=jpg', 'fm=jpeg', 'fm=png', 'fm=gif', 'fm=webp', 'format=jpg', 'format=png'];
+  const trustedCdns = ['images.unsplash.com', 'cdn.shopify.com', 'i.imgur.com', 'cloudinary.com', 'res.cloudinary.com'];
+  
+  const validImages = images.filter(url => {
+    if (!url || typeof url !== 'string') return false;
+    
+    const urlLower = url.toLowerCase();
+    
+    // Check for placeholder domains
+    if (invalidDomains.some(domain => urlLower.includes(domain))) {
+      notes.push(`Excluded placeholder image: ${url.substring(0, 50)}...`);
+      return false;
+    }
+    
+    // Must be HTTP(S)
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      notes.push(`Excluded non-HTTP image: ${url.substring(0, 50)}...`);
+      return false;
+    }
+    
+    // Check for valid extension or format
+    const hasValidExtension = validExtensions.some(ext => urlLower.includes(ext));
+    const hasValidFormat = validFormats.some(fmt => urlLower.includes(fmt));
+    const isTrustedCdn = trustedCdns.some(cdn => urlLower.includes(cdn));
+    
+    if (!hasValidExtension && !hasValidFormat && !isTrustedCdn) {
+      notes.push(`Excluded image without valid format: ${url.substring(0, 50)}...`);
+      return false;
+    }
+    
+    return true;
+  });
+  
+  // Limit to 3 images
+  const limitedImages = validImages.slice(0, 3);
+  if (validImages.length > 3) {
+    notes.push(`Limited images from ${validImages.length} to 3`);
+  }
+  
+  return { validImages: limitedImages, notes };
 }
 
 serve(async (req) => {
@@ -308,52 +468,97 @@ Return ONLY valid JSON, no markdown formatting.`;
       });
     }
 
-    // Always note about images
-    if (!parsedData.images || parsedData.images.length === 0) {
-      reviewNotes.push({
-        type: 'missing',
-        field: 'images',
-        message: 'REQUIRES ACTION: No product images found - add official manufacturer images before publishing'
-      });
-    }
-
     // Generate spec hash for duplicate detection
     const specHash = generateSpecHash(parsedData.sales_content?.key_specifications || []);
 
-    // Build the final product data
+    // Generate SKU in brand-model format
+    const productTitle = parsedData.product_title || productName;
+    const generatedSku = generateSku(productTitle);
+    reviewNotes.push({
+      type: 'assumption',
+      field: 'sku',
+      message: `SKU auto-generated: "${generatedSku}" (format: brand-model)`
+    });
+
+    // Determine category
+    const productCategory = parsedData.category || category || 'Uncategorized';
+
+    // Prefill pricing with defaults if missing
+    const rawPricing = {
+      cost_price: parsedData.pricing?.cost_price ?? null,
+      supply_price: parsedData.pricing?.supply_price ?? null,
+      wholesale_price: parsedData.pricing?.wholesale_price ?? null,
+      retail_price: parsedData.pricing?.retail_price ?? null,
+    };
+    const { pricing: prefilledPricing, prefilled: pricingPrefilled } = prefillPricing(rawPricing, productCategory);
+    
+    if (pricingPrefilled.length > 0) {
+      reviewNotes.push({
+        type: 'estimate',
+        field: 'pricing',
+        message: `Pricing prefilled: ${pricingPrefilled.join(', ')}. Based on category "${productCategory}" standard margins. Verify with supplier.`
+      });
+    }
+
+    // Prefill MOQ with defaults if missing
+    const rawSupplierTrade = {
+      supplier_name: parsedData.supplier_trade?.supplier_name || `${productName.split(' ')[0]} International Ltd.`,
+      hs_code: parsedData.supplier_trade?.hs_code || '',
+      moq: parsedData.supplier_trade?.moq ?? null,
+      moq_exclusive_importer: parsedData.supplier_trade?.moq_exclusive_importer ?? null,
+      moq_distributor: parsedData.supplier_trade?.moq_distributor ?? null,
+      moq_retailer: parsedData.supplier_trade?.moq_retailer ?? null,
+    };
+    const { supplier_trade: prefilledSupplierTrade, prefilled: moqPrefilled } = prefillMoq(rawSupplierTrade);
+    
+    if (moqPrefilled.length > 0) {
+      reviewNotes.push({
+        type: 'estimate',
+        field: 'supplier_trade',
+        message: `MOQ prefilled: ${moqPrefilled.join(', ')}. Using industry-standard defaults. Confirm with supplier.`
+      });
+    }
+
+    // Filter and limit images to 3 valid ones
+    const rawImages = parsedData.images || [];
+    const { validImages, notes: imageNotes } = filterValidImages(rawImages);
+    
+    if (validImages.length === 0) {
+      reviewNotes.push({
+        type: 'missing',
+        field: 'images',
+        message: 'No valid product images found. Product will be imported as draft without images. Add official manufacturer images before publishing.'
+      });
+    } else if (validImages.length < rawImages.length) {
+      reviewNotes.push({
+        type: 'assumption',
+        field: 'images',
+        message: `Images filtered: ${validImages.length} valid out of ${rawImages.length} total. ${imageNotes.join(' ')}`
+      });
+    }
+
+    // Build the final product data with prefilled values
     const productData: ProductData = {
-      product_title: parsedData.product_title || productName,
-      sku: generateSku(parsedData.product_title || productName),
+      product_title: productTitle,
+      sku: generatedSku,
       product_type: 'simple',
-      category: parsedData.category || category || 'Uncategorized',
-      images: parsedData.images || [],
-      pricing: {
-        cost_price: parsedData.pricing?.cost_price ?? null,
-        supply_price: parsedData.pricing?.supply_price ?? null,
-        wholesale_price: parsedData.pricing?.wholesale_price ?? null,
-        retail_price: parsedData.pricing?.retail_price ?? null,
-      },
-      supplier_trade: {
-        supplier_name: parsedData.supplier_trade?.supplier_name || `${productName.split(' ')[0]} International Ltd.`,
-        hs_code: parsedData.supplier_trade?.hs_code || '',
-        moq: parsedData.supplier_trade?.moq ?? null,
-        moq_exclusive_importer: parsedData.supplier_trade?.moq_exclusive_importer ?? null,
-        moq_distributor: parsedData.supplier_trade?.moq_distributor ?? null,
-        moq_retailer: parsedData.supplier_trade?.moq_retailer ?? null,
-      },
+      category: productCategory,
+      images: validImages,
+      pricing: prefilledPricing,
+      supplier_trade: prefilledSupplierTrade,
       logistics: {
         import_certification_required: parsedData.logistics?.import_certification_required ?? false,
         import_certification_details: parsedData.logistics?.import_certification_details || '',
-        manufacturing_time: parsedData.logistics?.manufacturing_time || '',
+        manufacturing_time: parsedData.logistics?.manufacturing_time || '15-30 days',
       },
       sales_content: {
         key_specifications: parsedData.sales_content?.key_specifications || [],
-        package_options: parsedData.sales_content?.package_options || [],
+        package_options: parsedData.sales_content?.package_options || ['Standard packaging'],
         applications: parsedData.sales_content?.applications || [],
         certifications: parsedData.sales_content?.certifications || [],
       },
       descriptions: {
-        product_overview: parsedData.descriptions?.product_overview || '',
+        product_overview: parsedData.descriptions?.product_overview || `${productTitle} - Professional grade product for commercial and residential use.`,
         key_highlights: parsedData.descriptions?.key_highlights || [],
       },
       review_notes: reviewNotes,
