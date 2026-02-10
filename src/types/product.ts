@@ -14,10 +14,18 @@ export interface SupplierTrade {
   moq_retailer: number | null;
 }
 
+export interface CompanyInfo {
+  company_name: string;
+  country_of_origin: string;
+  year_established: string;
+  daily_production: string;
+}
+
 export interface Logistics {
   import_certification_required: boolean;
   import_certification_details: string;
   manufacturing_time: string;
+  packaging_details: string;
 }
 
 export interface Certification {
@@ -56,6 +64,7 @@ export interface ProductData {
   product_type: 'simple';
   category: string;
   images: string[];
+  company_info: CompanyInfo;
   pricing: ProductPricing;
   supplier_trade: SupplierTrade;
   logistics: Logistics;
