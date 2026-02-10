@@ -1,6 +1,5 @@
-import { Package, DollarSign, Truck, FileText, Tag } from 'lucide-react';
+import { Package, DollarSign, Truck, FileText, Tag, Building2, Globe, Calendar, Factory, BoxIcon } from 'lucide-react';
 import { ProductData } from '@/types/product';
-import { cn } from '@/lib/utils';
 
 interface DataPreviewProps {
   data: ProductData;
@@ -30,6 +29,34 @@ export const DataPreview = ({ data }: DataPreviewProps) => {
           </span>
         </div>
       </div>
+
+      {/* Company Info */}
+      {data.company_info && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-medium flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-muted-foreground" />
+            Company Information
+          </h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-secondary/50 rounded-lg p-3 border border-border">
+              <p className="text-xs text-muted-foreground flex items-center gap-1"><Building2 className="w-3 h-3" /> Company</p>
+              <p className="font-medium">{data.company_info.company_name || '—'}</p>
+            </div>
+            <div className="bg-secondary/50 rounded-lg p-3 border border-border">
+              <p className="text-xs text-muted-foreground flex items-center gap-1"><Globe className="w-3 h-3" /> Country of Origin</p>
+              <p className="font-medium">{data.company_info.country_of_origin || '—'}</p>
+            </div>
+            <div className="bg-secondary/50 rounded-lg p-3 border border-border">
+              <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" /> Year Established</p>
+              <p className="font-medium">{data.company_info.year_established || '—'}</p>
+            </div>
+            <div className="bg-secondary/50 rounded-lg p-3 border border-border">
+              <p className="text-xs text-muted-foreground flex items-center gap-1"><Factory className="w-3 h-3" /> Daily Production</p>
+              <p className="font-medium">{data.company_info.daily_production || '—'}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Images */}
       {data.images.length > 0 && (
@@ -100,6 +127,12 @@ export const DataPreview = ({ data }: DataPreviewProps) => {
             </p>
           </div>
         </div>
+        {data.logistics.packaging_details && (
+          <div className="bg-secondary/50 rounded-lg p-3 border border-border">
+            <p className="text-xs text-muted-foreground flex items-center gap-1"><BoxIcon className="w-3 h-3" /> Packaging Details</p>
+            <p className="font-medium">{data.logistics.packaging_details}</p>
+          </div>
+        )}
       </div>
 
       {/* Description */}

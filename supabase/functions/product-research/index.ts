@@ -23,6 +23,12 @@ interface ProductData {
   product_type: 'simple';
   category: string;
   images: string[];
+  company_info: {
+    company_name: string;
+    country_of_origin: string;
+    year_established: string;
+    daily_production: string;
+  };
   pricing: {
     cost_price: number | null;
     supply_price: number | null;
@@ -41,6 +47,7 @@ interface ProductData {
     import_certification_required: boolean;
     import_certification_details: string;
     manufacturing_time: string;
+    packaging_details: string;
   };
   sales_content: {
     key_specifications: string[];
@@ -275,7 +282,9 @@ CRITICAL RULES:
 2. EVERY specification must be specific to the EXACT product model provided
 3. If you cannot find specific data for this exact model, clearly mark it as "estimated" or "assumed"
 4. Research the ACTUAL product - different models have DIFFERENT specs
-5. Include sources in your research notes
+5. Include sources where you found the information
+6. NEVER create new fields. Only fill the predefined fields below.
+7. If a field already has data from PDF context, do NOT overwrite it.
 
 You must return valid JSON matching this exact structure:
 {
@@ -284,6 +293,12 @@ You must return valid JSON matching this exact structure:
   "product_type": "simple",
   "category": "Category > Subcategory",
   "images": [],
+  "company_info": {
+    "company_name": "Official company/manufacturer name",
+    "country_of_origin": "Country where company is headquartered",
+    "year_established": "Year the company was founded",
+    "daily_production": "Estimated daily production capacity from official/industry reports"
+  },
   "pricing": {
     "cost_price": number or null,
     "supply_price": number or null,
@@ -301,16 +316,17 @@ You must return valid JSON matching this exact structure:
   "logistics": {
     "import_certification_required": boolean,
     "import_certification_details": "string",
-    "manufacturing_time": "string"
+    "manufacturing_time": "string",
+    "packaging_details": "Packaging type, dimensions, weight per unit"
   },
   "sales_content": {
-    "key_specifications": ["spec1", "spec2", ...],
+    "key_specifications": ["CPU", "RAM", "storage", "size", "weight", "battery", etc.],
     "package_options": ["option1", "option2"],
     "applications": ["app1", "app2"],
     "certifications": [{"name": "cert", "details": "info"}]
   },
   "descriptions": {
-    "product_overview": "paragraph",
+    "product_overview": "Short and accurate paragraph",
     "key_highlights": ["highlight1", "highlight2"]
   },
   "sources_used": ["source1", "source2"],
@@ -537,6 +553,29 @@ Return ONLY valid JSON, no markdown formatting.`;
       });
     }
 
+    // Build company info with review notes for missing data
+    const companyInfo = {
+      company_name: parsedData.company_info?.company_name || `${productName.split(' ')[0]} Inc.`,
+      country_of_origin: parsedData.company_info?.country_of_origin || '',
+      year_established: parsedData.company_info?.year_established || '',
+      daily_production: parsedData.company_info?.daily_production || '',
+    };
+    
+    if (!parsedData.company_info?.company_name) {
+      reviewNotes.push({ type: 'assumption', field: 'company_info.company_name', message: 'Company name assumed from product title. Verify with manufacturer.' });
+    }
+    if (!companyInfo.country_of_origin) {
+      reviewNotes.push({ type: 'missing', field: 'company_info.country_of_origin', message: 'Country of origin not found. Requires manual entry.' });
+    }
+    if (!companyInfo.daily_production) {
+      reviewNotes.push({ type: 'missing', field: 'company_info.daily_production', message: 'Daily production capacity not found. Check industry reports.' });
+    }
+
+    const packagingDetails = parsedData.logistics?.packaging_details || '';
+    if (!packagingDetails) {
+      reviewNotes.push({ type: 'missing', field: 'logistics.packaging_details', message: 'Packaging details not found. Requires manual entry.' });
+    }
+
     // Build the final product data with prefilled values
     const productData: ProductData = {
       product_title: productTitle,
@@ -544,12 +583,14 @@ Return ONLY valid JSON, no markdown formatting.`;
       product_type: 'simple',
       category: productCategory,
       images: validImages,
+      company_info: companyInfo,
       pricing: prefilledPricing,
       supplier_trade: prefilledSupplierTrade,
       logistics: {
         import_certification_required: parsedData.logistics?.import_certification_required ?? false,
         import_certification_details: parsedData.logistics?.import_certification_details || '',
         manufacturing_time: parsedData.logistics?.manufacturing_time || '15-30 days',
+        packaging_details: packagingDetails,
       },
       sales_content: {
         key_specifications: parsedData.sales_content?.key_specifications || [],
