@@ -18,6 +18,11 @@ const categoryLabels: Record<string, string> = {
   specifications: 'Specifications',
   logistics: 'Logistics',
   review_notes: 'Review Notes',
+  company: 'Company Info',
+  certifications: 'Certifications & Standards',
+  clients: 'Clients & Markets',
+  contact: 'Contact & Logistics',
+  descriptions: 'Descriptions',
 };
 
 const categoryIcons: Record<string, string> = {
@@ -30,6 +35,11 @@ const categoryIcons: Record<string, string> = {
   specifications: '📋',
   logistics: '🚚',
   review_notes: '📌',
+  company: '🏢',
+  certifications: '🛡️',
+  clients: '🎯',
+  contact: '📍',
+  descriptions: '📄',
 };
 
 export const ValidationReport = ({ result, compact = false }: ValidationReportProps) => {
